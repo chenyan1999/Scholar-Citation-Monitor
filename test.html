@@ -167,6 +167,154 @@
   <div id="statusResult" class="result" style="display: none;"></div>
 </div>
 
+<div class="section">
+  <h2>5. UI 预览 - 论文变化展开效果</h2>
+  <p style="color:#666;font-size:13px;">模拟有新引用的作者卡片，直接在浏览器中测试展开/折叠效果。</p>
+
+  <style>
+    /* 从 popup.html 复制的样式 */
+    #ui-preview { width: 400px; }
+    #ui-preview .author-item {
+      border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px;
+      margin-bottom: 12px; position: relative; background: white; transition: all 0.2s ease;
+    }
+    #ui-preview .author-item.has-new {
+      border-color: #34a853; background-color: #f8fff8;
+      box-shadow: 0 0 0 1px rgba(52,168,83,0.2);
+    }
+    #ui-preview .new-badge {
+      position: absolute; top: -5px; right: -5px; background: #34a853;
+      color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; z-index: 1;
+    }
+    #ui-preview .author-header {
+      display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;
+    }
+    #ui-preview .author-name-link {
+      font-weight: bold; font-size: 15px; color: #1a73e8; flex: 1; padding-right: 10px; cursor: pointer;
+    }
+    #ui-preview .author-info { font-size: 12px; color: #666; margin-bottom: 10px; line-height: 1.4; }
+    #ui-preview .citation-info { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 8px; }
+    #ui-preview .citation-item {
+      display: flex; flex-direction: column; align-items: center; min-width: 70px;
+      padding: 6px; background: #f8f9fa; border-radius: 4px;
+    }
+    #ui-preview .citation-label { font-size: 10px; color: #666; margin-bottom: 2px; text-transform: uppercase; font-weight: 500; }
+    #ui-preview .citation-value { font-weight: bold; font-size: 16px; color: #333; }
+    #ui-preview .citation-change { color: #34a853; font-size: 12px; font-weight: bold; margin-top: 2px; }
+    #ui-preview .last-updated { font-size: 10px; color: #999; text-align: right; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0f0; }
+    #ui-preview .delete-btn {
+      background: #ea4335; color: white; border: none; border-radius: 50%;
+      width: 24px; height: 24px; font-size: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    #ui-preview .mark-read-btn { background: #fbbc04; color: #333; font-size: 11px; padding: 4px 8px; border-radius: 4px; border: none; cursor: pointer; }
+    #ui-preview .paper-changes-btn {
+      background: #ff9800; color: white; font-size: 11px; padding: 4px 8px;
+      border-radius: 12px; border: none; cursor: pointer; font-weight: 500;
+    }
+    #ui-preview .paper-changes-btn:hover { background: #f57c00; }
+    #ui-preview .paper-changes-btn .toggle-icon { display: inline-block; transition: transform 0.2s; }
+    #ui-preview .paper-changes-btn.expanded .toggle-icon { transform: rotate(90deg); }
+    #ui-preview .paper-changes-inline {
+      display: none; margin-top: 10px; border: 1px solid #e8e8e8;
+      border-radius: 6px; overflow: hidden; background: #fafafa;
+    }
+    #ui-preview .change-item { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
+    #ui-preview .change-item:last-child { border-bottom: none; }
+    #ui-preview .change-header { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    #ui-preview .change-paper-title {
+      font-weight: bold; font-size: 13px; color: #333; flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    #ui-preview .change-label {
+      flex-shrink: 0; font-size: 12px; color: #2e7d32; background: #e8f5e9;
+      padding: 2px 8px; border-radius: 10px; white-space: nowrap;
+    }
+    #ui-preview .change-detail { font-size: 12px; color: #888; margin-top: 3px; }
+    #ui-preview .change-link { color: #1976d2; text-decoration: none; }
+    #ui-preview .change-link:hover { text-decoration: underline; }
+    #ui-preview .citing-title {
+      font-size: 12px; color: #555; padding: 3px 0 0 8px;
+      border-left: 2px solid #ddd; margin-top: 4px; line-height: 1.4;
+    }
+  </style>
+
+  <div id="ui-preview">
+    <div class="author-item has-new">
+      <div class="new-badge">NEW</div>
+      <div class="author-header">
+        <div class="author-name-link">张伟</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="paper-changes-btn" onclick="togglePaperChanges('preview1', this)">
+            <span class="toggle-icon">›</span> 论文变化 (3)
+          </button>
+          <button class="mark-read-btn">已读</button>
+          <button class="delete-btn">×</button>
+        </div>
+      </div>
+      <div class="author-info">
+        <div><strong>机构:</strong> 清华大学</div>
+        <div><strong>研究领域:</strong> 机器学习, 计算机视觉</div>
+        <div><strong>总论文数:</strong> <span style="color:#1a73e8;font-weight:bold;">47</span> 篇</div>
+      </div>
+      <div class="citation-info">
+        <div class="citation-item">
+          <div class="citation-label">总引用</div>
+          <div class="citation-value">3,821</div>
+          <div class="citation-change">+5</div>
+        </div>
+        <div class="citation-item">
+          <div class="citation-label">H指数</div>
+          <div class="citation-value">28</div>
+        </div>
+        <div class="citation-item">
+          <div class="citation-label">i10指数</div>
+          <div class="citation-value">41</div>
+        </div>
+      </div>
+      <div class="paper-changes-inline" id="paper-changes-preview1">
+        <div class="change-item">
+          <div class="change-header">
+            <span class="change-paper-title" title="Attention Is All You Need: A Comprehensive Survey on Transformer Architectures and Their Applications in Natural Language Processing">Attention Is All You Need: A Comprehensive Survey on Transformer Architectures and Their Applications in Natural Language Processing</span>
+            <span class="change-label">+3 新增引用</span>
+          </div>
+          <div class="change-detail">142 → 145 次引用（2017）· <a href="#" class="change-link">查看</a></div>
+          <div class="citing-title">A Survey on Vision-Language Models for Multimodal Understanding</div>
+          <div class="citing-title">Efficient Transformers: A Comprehensive Review of Sparse Attention Mechanisms</div>
+          <div class="citing-title">Cross-Modal Representation Learning with Contrastive Objectives</div>
+        </div>
+        <div class="change-item">
+          <div class="change-header">
+            <span class="change-paper-title" title="Deep Residual Learning for Image Recognition">Deep Residual Learning for Image Recognition</span>
+            <span class="change-label">+2 新增引用</span>
+          </div>
+          <div class="change-detail">89 → 91 次引用（2019）· <a href="#" class="change-link">查看</a></div>
+          <div class="citing-title">NeRF-based 3D Reconstruction with Residual Feature Aggregation</div>
+          <div class="citing-title">Medical Image Segmentation via Hierarchical Residual Networks</div>
+        </div>
+        <div class="change-item">
+          <div class="change-header">
+            <span class="change-paper-title" title="BERT: Pre-training of Deep Bidirectional Transformers">BERT: Pre-training of Deep Bidirectional Transformers</span>
+            <span class="change-label">+1 新增引用</span>
+          </div>
+          <div class="change-detail">56 → 57 次引用（2021）</div>
+          <div class="citing-title">Fine-tuning Large Language Models for Scientific Information Extraction</div>
+        </div>
+      </div>
+      <div class="last-updated">最后更新: 2026/3/30 14:23:05</div>
+    </div>
+  </div>
+</div>
+
+<script>
+function togglePaperChanges(id, btn) {
+  const panel = document.getElementById('paper-changes-' + id);
+  const isExpanded = panel.style.display === 'block';
+  panel.style.display = isExpanded ? 'none' : 'block';
+  btn.classList.toggle('expanded', !isExpanded);
+}
+</script>
+
 <script>
 let autoScroll = true;
 let logContainer = null;
@@ -649,6 +797,42 @@ async function triggerManualRefresh() {
       showResult(resultDiv, `触发刷新失败: ${error.message}`, 'error');
       log(`触发刷新失败: ${error.message}`, 'error');
   }
+}
+</script>
+
+<div class="section">
+  <h2>6. 测试引用文章解析</h2>
+  <p style="color:#666;font-size:13px;">
+    在浏览器中打开一个 Google Scholar cited-by 页面（如 <code>https://scholar.google.com/scholar?cites=XXXXX&as_ylo=2025</code>），
+    按 <strong>Ctrl+U</strong> 查看源码，全选复制后粘贴到下方，点击解析。
+  </p>
+  <textarea id="citingHtmlInput" style="width:100%;height:160px;font-family:monospace;font-size:12px;padding:8px;border:1px solid #ddd;border-radius:4px;" placeholder="粘贴 cited-by 页面的 HTML 源码..."></textarea>
+  <button onclick="parseCitingHtml()">解析引用文章标题</button>
+  <div id="citingResult" class="result" style="display:none;"></div>
+</div>
+
+<script>
+function parseCitingHtml() {
+  const html = document.getElementById('citingHtmlInput').value.trim();
+  const resultDiv = document.getElementById('citingResult');
+  if (!html) { showResult(resultDiv, '请粘贴 HTML 源码', 'error'); return; }
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const titles = Array.from(doc.querySelectorAll('.gs_r.gs_or h3.gs_rt'))
+    .map(h3 => (h3.querySelector('a') || h3).textContent.trim())
+    .filter(t => t.length > 0);
+
+  if (titles.length === 0) {
+    showResult(resultDiv, '未解析到任何标题，请确认粘贴的是 Scholar cited-by 页面的源码', 'error');
+    return;
+  }
+
+  resultDiv.innerHTML = `
+    <div style="margin-bottom:8px;"><strong>解析到 ${titles.length} 篇引用文章：</strong></div>
+    ${titles.map((t, i) => `<div style="padding:4px 0;border-bottom:1px solid #eee;">${i+1}. ${t}</div>`).join('')}
+  `;
+  resultDiv.className = 'result success';
+  resultDiv.style.display = 'block';
 }
 </script>
 </body>

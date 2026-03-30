@@ -1,7 +1,7 @@
 {
 "manifest_version": 3,
 "name": "Scholar Citation Monitor",
-"version": "1.0",
+"version": "1.1",
 "description": "监控Google Scholar作者引用数变化",
 "host_permissions": [
   "https://scholar.google.com/*",
@@ -29,6 +29,7 @@
 },
 "permissions": [
     "storage",
+    "unlimitedStorage",
     "alarms",
     "notifications",
     "activeTab"

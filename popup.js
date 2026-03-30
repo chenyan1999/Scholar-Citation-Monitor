@@ -418,12 +418,14 @@ extractPapersFromHtml(html, startIndex = 0) {
                 const citations = citationElement ? parseInt(citationElement.textContent.trim()) || 0 : 0;
                 const year = yearElement ? yearElement.textContent.trim() : '';
                 const link = titleElement.getAttribute('href');
-                
+                const citedByPath = citationElement ? citationElement.getAttribute('href') : null;
+
                 papers.push({
                     title,
                     citations,
                     year,
                     link: link ? `https://scholar.google.com${link}` : '',
+                    citedByPath: citedByPath || '',
                     index: startIndex + index
                 });
             }
@@ -505,6 +507,25 @@ async refreshAll() {
                 if (authors[i].papers && authors[i].papers.length > 0) {
                     updatedInfo.paperChanges = this.comparePapers(authors[i].papers, updatedInfo.papers);
                     console.log(`${updatedInfo.name} 检测到 ${updatedInfo.paperChanges.length} 篇论文引用变化`);
+
+                    // 对引用增加的论文，抓 cited-by 页，diff 出新增引用标题
+                    for (const change of updatedInfo.paperChanges) {
+                        if (change.change <= 0) continue;
+                        const newPaper = updatedInfo.papers.find(p => p.title === change.title);
+                        const oldPaper = authors[i].papers.find(p => p.title === change.title);
+                        if (!newPaper?.citedByPath) continue;
+
+                        await new Promise(r => setTimeout(r, 800));
+                        const currentCiting = await this.fetchCitingPapers(newPaper.citedByPath, updatedInfo.workingDomain);
+                        const oldCiting = oldPaper?.citingPapers || [];
+
+                        if (oldCiting.length > 0) {
+                            const oldSet = new Set(oldCiting);
+                            change.newCitingTitles = currentCiting.filter(t => !oldSet.has(t));
+                        }
+                        // 暂存新快照，等用户点已读后才正式写入
+                        newPaper.pendingCitingPapers = currentCiting;
+                    }
                 }
             } else {
                 updatedInfo.hasNewCitations = authors[i].hasNewCitations;
@@ -554,6 +575,32 @@ async refreshAll() {
 
     this.updateLastUpdateTime();
     this.updateStatsSummary();
+}
+
+// 获取某篇论文近两年的引用文章标题列表
+async fetchCitingPapers(citedByPath, domain) {
+    if (!citedByPath) return [];
+    const cutoffYear = new Date().getFullYear() - 1; // 近两年起始年份
+    const url = `https://${domain}${citedByPath}&as_ylo=${cutoffYear}`;
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Cache-Control': 'no-cache'
+            }
+        });
+        if (!response.ok) return [];
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        return Array.from(doc.querySelectorAll('.gs_r.gs_or h3.gs_rt'))
+            .map(h3 => (h3.querySelector('a') || h3).textContent.trim())
+            .filter(t => t.length > 0);
+    } catch (e) {
+        console.log('获取引用列表失败:', e.message);
+        return [];
+    }
 }
 
 // 比较论文变化
@@ -649,6 +696,15 @@ async markAsRead(userId) {
     const authors = await this.getStoredAuthors();
     const author = authors.find(a => a.userId === userId);
     if (author) {
+        // 将暂存的引用快照正式写入，作为下次比较的基准
+        if (author.papers) {
+            author.papers.forEach(paper => {
+                if (paper.pendingCitingPapers) {
+                    paper.citingPapers = paper.pendingCitingPapers;
+                    delete paper.pendingCitingPapers;
+                }
+            });
+        }
         author.hasNewCitations = false;
         delete author.previousCitations;
         delete author.changeTimestamp;
@@ -689,6 +745,23 @@ async saveAuthor(authorInfo) {
 }
 
 async saveAuthors(authors) {
+    const LIMIT = 15 * 1024 * 1024; // 15MB 软限制
+    const size = new Blob([JSON.stringify(authors)]).size;
+
+    if (size > LIMIT) {
+        console.warn(`存储超过 15MB（当前 ${(size / 1024 / 1024).toFixed(1)}MB），清理旧引用快照`);
+        // 优先清理没有待确认变化的论文的 citingPapers（体积最大的部分）
+        for (const author of authors) {
+            if (!author.papers) continue;
+            for (const paper of author.papers) {
+                if (!paper.pendingCitingPapers) {
+                    delete paper.citingPapers;
+                }
+            }
+            if (new Blob([JSON.stringify(authors)]).size <= LIMIT) break;
+        }
+    }
+
     return new Promise((resolve) => {
         chrome.storage.local.set({authors}, resolve);
     });
@@ -784,8 +857,8 @@ async loadAuthors() {
                 <div class="author-header">
                     <div class="author-name-link" data-url="${author.url}" title="点击访问 Google Scholar 主页">${author.name}</div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        ${shouldShowPaperChanges ? 
-                            `<button class="paper-changes-btn" data-user-id="${author.userId}">论文变化 (${author.paperChanges.length})</button>` : ''}
+                        ${shouldShowPaperChanges ?
+                            `<button class="paper-changes-btn" data-user-id="${author.userId}"><span class="toggle-icon">›</span> 论文变化 (${author.paperChanges.length})</button>` : ''}
                         ${showAsNew ? `<button class="mark-read-btn" data-user-id="${author.userId}">已读</button>` : ''}
                         <button class="delete-btn" data-user-id="${author.userId}">×</button>
                     </div>
@@ -812,6 +885,23 @@ async loadAuthors() {
                         <div class="citation-value">${i10Index}</div>
                     </div>
                 </div>
+                ${shouldShowPaperChanges ? `
+                <div class="paper-changes-inline" id="paper-changes-${author.userId}">
+                    ${author.paperChanges.map(change => `
+                        <div class="change-item">
+                            <div class="change-header">
+                                <span class="change-paper-title" title="${change.title}">${change.title}</span>
+                                <span class="change-label">+${change.change} 新增引用</span>
+                            </div>
+                            <div class="change-detail">${change.oldCitations} → ${change.newCitations} 次引用${change.year ? '（' + change.year + '）' : ''}${change.link ? ` · <a href="${change.link}" target="_blank" class="change-link">查看</a>` : ''}</div>
+                            ${change.newCitingTitles && change.newCitingTitles.length > 0 ?
+                                change.newCitingTitles.map(t => `<div class="citing-title">${t}</div>`).join('') :
+                                ''
+                            }
+                        </div>
+                    `).join('')}
+                </div>
+                ` : ''}
                 <div class="last-updated">
                     最后更新: ${new Date(author.lastUpdated).toLocaleString('zh-CN')}
                 </div>
@@ -841,9 +931,12 @@ async loadAuthors() {
     });
 
     container.querySelectorAll('.paper-changes-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const userId = e.target.getAttribute('data-user-id');
-            this.showPaperChanges(userId);
+        btn.addEventListener('click', () => {
+            const userId = btn.getAttribute('data-user-id');
+            const panel = document.getElementById(`paper-changes-${userId}`);
+            const isExpanded = panel.style.display === 'block';
+            panel.style.display = isExpanded ? 'none' : 'block';
+            btn.classList.toggle('expanded', !isExpanded);
         });
     });
 }
