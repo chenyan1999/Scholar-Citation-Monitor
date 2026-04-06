@@ -67,6 +67,17 @@ async addAuthor() {
 
         // 获取完整的作者信息，包括所有论文
         const authorInfo = await this.fetchCompleteAuthorInfo(url);
+
+        // 建立引用基线：为每篇有引用数的论文抓取近两年引用文章列表
+        addBtn.textContent = '添加中...(建立引用基线)';
+        const papersWithCitations = authorInfo.papers.filter(p => p.citations > 0 && p.citedByPath);
+        for (let i = 0; i < papersWithCitations.length; i++) {
+            const paper = papersWithCitations[i];
+            addBtn.textContent = `添加中...(引用基线 ${i + 1}/${papersWithCitations.length})`;
+            paper.citingPapers = await this.fetchCitingPapers(paper.citedByPath, authorInfo.workingDomain);
+            await new Promise(r => setTimeout(r, 800));
+        }
+
         await this.saveAuthor(authorInfo);
         
         await this.setLastUpdateTime();
